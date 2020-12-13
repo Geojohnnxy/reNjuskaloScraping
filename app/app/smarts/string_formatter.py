@@ -51,7 +51,9 @@ def capitalize_first_letter(string):
     if string[0].isupper():
         return string
     else:
+        string = list(string)
         string[0] = string[0].replace(string[0], string[0].upper())
+        string = "".join(string)
     return string
 
 

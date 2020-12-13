@@ -32,20 +32,25 @@ def create_session():
 
 
 class ProcessingPipeline(object):
+    active_properties = []
     subcategory_list = None
     nlp = None
     translation_list = None
     regex_pattern = None
 
-    def open_spider(self, item):
-        # TODO fetch
-        pass
+    def get_active_properties(self, spider):
+        r = requests.get("http://127.0.0.1:8000/api/active-properties/", params={"spider": spider.name})
+        self.active_properties = r.json()
+        return self.active_properties
+
+    def open_spider(self, spider):
+        spider.open_pipeline = self
 
     def process_item(self, item, spider):
         item["spider"] = spider.name
         item["title"] = StringFormatter(content=item["title"]).format()
         item["location"] = StringFormatter(content=item["location"]).format()
-        item["owner"] = StringFormatter(content=item["owner"]).format()
+        item["owner_name"] = StringFormatter(content=item["owner_name"]).format()
         item["id"] = StringFormatter(content=item["id"], formatting="digit").format()
         item["description"] = StringFormatter(content=item["description"], formatting="multi").format()
 
@@ -55,12 +60,12 @@ class ProcessingPipeline(object):
         item["owner_info"] = JsonFormatter(data=item["owner_info"]).format()
 
         item["area"] = FloatFormatter(data=item["area"]).format()
-        item["rooms"] = FloatFormatter(data=item["rooms"]).format()
+        item["room"] = FloatFormatter(data=item["room"]).format()
         item["price"] = FloatFormatter(data=item["price"]).format()
         item["price"] = PriceFormatter(price=item["price"], area=item["area"]).format()
 
         item["url"] = UrlFormatter(url=item["url"]).format()
-        item["owner_id"] = UrlFormatter(url=item["owner_id"]).format()
+        item["owner_url"] = UrlFormatter(url=item["owner_url"]).format()
         item["active"] = True
         return item
 
@@ -96,27 +101,28 @@ class ExportPipeline(object):
         # requests.post(os.getenv("API_URL") + "job/", data=self.job_detail)
 
     def process_item(self, item, spider):
-        # item_ = item.copy()
-        # # for key in ["tags", "subcategory", "images"]:
-        # #     item_[key] = json.dumps(item_[key])
-        # if item_ not in self.scraped_items:
-        #     res = requests.post(os.getenv("API_URL") + "object-bot/", json=json.dumps([item_], cls=ScrapyJSONEncoder))
-        #     if res.status_code != 201:
-        #         logging.error(res.text)
-        #         logging.error("not imported")
+        try:
+            res = requests.post("http://127.0.0.1:8000/api/scraped/", data=json.dumps(item, cls=ScrapyJSONEncoder), headers={"Content-Type":"application/json"})
+        except Exception as e:
+            logging.info(e)
         return item
 
 
     def close_spider(self, spider):
+        existing_urls = spider.urls
+        active_properties = [i for i in spider.active_properties]
+        properties_to_deactivate = set(active_properties) - set(existing_urls)
+        items = []
+        for property in properties_to_deactivate:
+            items.append({
+                "url": property,
+                "spider": spider.name,
+                "active": False
+            })
+        try:
+            res = requests.post("http://127.0.0.1:8000/api/scraped/", data=json.dumps(items, cls=ScrapyJSONEncoder), headers={"Content-Type":"application/json"})
+        except Exception as e:
+            logging.info(e)
         self.job_detail["finish"] = datetime.utcnow()
         self.job_detail["scraped_count"] = self.stats.get_stats()["item_scraped_count"]
-        # bulbasaur_ping(spider.name + " bot finished")
-        # bulbasaur_ping(self.job_detail)
-        scraped_count = self.stats.get_stats()["item_scraped_count"]
-        previous_scraped_counts = [i["scraped_count"] for i in self.spider_data["job_set"] if i["scraped_count"] is not None]
-        if len(previous_scraped_counts) > 0:
-            avg = sum(previous_scraped_counts)/len(previous_scraped_counts)
-            if scraped_count*0.8 < avg or scraped_count > avg:
-                logging.debug("Deactivating missing objects")
-                # deactivate_existing_objects()
         # requests.post(os.getenv("API_URL") + "job/", data=self.job_detail)

@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import json
+import logging
 import re
+from difflib import SequenceMatcher
 
 import scrapy
 
@@ -11,6 +13,12 @@ class NjuskaloSpider(scrapy.Spider):
     name = 'njuskalo'
     allowed_domains = ['njuskalo.hr']
     start_urls = ['https://www.njuskalo.hr/prodaja-stanova/zagreb?page=1']
+    pattern = re.compile('([^\s\w]|_)+')
+
+    def __init__(self):
+        self.open_pipeline = None
+        self.active_properties = []
+        self.urls = []
 
     def NextPageUrl_Extract_FromUrl(self, url):
         page_str = re.findall(r"page=+\d*", url)
@@ -20,10 +28,49 @@ class NjuskaloSpider(scrapy.Spider):
         url = url.replace(page_str[0], page_str_)
         return url
 
+    def string_compare(self, string_1, string_2):
+        string_1 = self.pattern.sub('', string_1)
+        string_2 = self.pattern.sub('', string_2)
+        similarity = SequenceMatcher(None, string_1, string_2).quick_ratio()
+        return similarity
+
     def parse(self, response):
+        self.active_properties = self.open_pipeline.get_active_properties(spider=self)
         object_urls = response.css(".EntityList-item--Regular::attr('data-href')").extract()
-        for url in object_urls:
-            url = "https://www.njuskalo.hr" + url
+        objects = response.css(".EntityList-item")
+        urls = []
+        for object in objects:
+            url = object.css(".EntityList-item::attr('data-href')").extract()
+            if not url:
+                continue
+            url = "https://www.njuskalo.hr" + url[0]
+            price = object.css(".price--eur::text").extract()
+            if len(price) > 0:
+                price = price[0].strip().replace(".", "")
+            title = object.css(".entity-title > a::text").extract()
+            if len(title) > 0:
+                title = title[0].strip()
+            scraped_data = {
+                "title": title,
+                "price": price,
+                "url": url
+            }
+            if len([i for i in scraped_data.values() if i]) < 3:
+                continue
+            self.urls.append(url)
+            if self.active_properties.get(url):
+                logging.info(f"active property exists {url}")
+                if int(scraped_data["price"]) != int(self.active_properties.get(url).get("price")):
+                    urls.append(url)
+                    continue
+                if self.string_compare(scraped_data["title"], self.active_properties.get(url).get("title")) < 0.95:
+                    urls.append(url)
+                    continue
+            else:
+                logging.info(f"new property: {url}")
+                urls.append(url)
+
+        for url in urls:
             yield scrapy.Request(url, callback=self.parse_object, dont_filter=True)
 
         # if len(object_urls):
@@ -37,13 +84,15 @@ class NjuskaloSpider(scrapy.Spider):
 
             item["url"] = response.url
             item["title"] = response.css(".ClassifiedDetailSummary-title *::text").extract()
+            if len(item["title"]) > 0:
+                item["title"] = item["title"][0].replace("(prodaja)", "").replace("(iznajmljivanje)", "")
             item["price"] = response.css(".ClassifiedDetailSummary-priceForeign *::text").extract()
             item["id"] = response.css(".ClassifiedDetailSummary-adCode *::text").extract()
 
             item["description"] = response.css(".ClassifiedDetailDescription-text *::text").extract()
 
-            item["owner"] = response.css(".ClassifiedDetailOwnerDetailsWrap--positionPrimary .ClassifiedDetailOwnerDetails-title *::text").extract()
-            item["owner_id"] = response.css(".ClassifiedDetailOwnerDetailsWrap--positionPrimary .ClassifiedDetailOwnerDetails-linkAllAds::attr('href')").extract()
+            item["owner_name"] = response.css(".ClassifiedDetailOwnerDetailsWrap--positionPrimary .ClassifiedDetailOwnerDetails-title *::text").extract()
+            item["owner_url"] = response.css(".ClassifiedDetailOwnerDetailsWrap--positionPrimary .ClassifiedDetailOwnerDetails-linkAllAds::attr('href')").extract()
             item["owner_info"] = ""
 
             owner_info_dict = {}
@@ -116,7 +165,7 @@ class NjuskaloSpider(scrapy.Spider):
             item["images"] = images_
 
             item["location"] = extra.pop("Lokacija", None)
-            item["rooms"] = extra.pop("Broj soba", None)
+            item["room"] = extra.pop("Broj soba", None)
             item["area"] = extra.pop("Stambena površina", None)
             item["listing_info"] = extra
 
