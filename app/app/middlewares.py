@@ -105,4 +105,4 @@ class AppDownloaderMiddleware(object):
 
 class CustomProxyMiddleware(object):
     def process_request(self, request, spider):
-        request.meta["proxy"] = "http://207.154.237.2:5566"
+        request.meta["proxy"] = "http://206.189.59.192:8118"

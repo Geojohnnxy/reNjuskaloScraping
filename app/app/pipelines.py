@@ -12,6 +12,8 @@ from app.smarts.price_formatter import PriceFormatter
 from app.smarts.url_formatter import UrlFormatter
 
 from pprint import pprint
+
+from scrapy import crawler
 from scrapy.exceptions import CloseSpider
 from scrapy.utils.serialize import ScrapyJSONEncoder
 
@@ -39,7 +41,7 @@ class ProcessingPipeline(object):
     regex_pattern = None
 
     def get_active_properties(self, spider):
-        r = requests.get("http://127.0.0.1:8000/api/active-properties/", params={"spider": spider.name})
+        r = requests.get("http://web.roomba.roombacat.xyz/api/active-properties/", params={"spider": spider.name})
         self.active_properties = r.json()
         return self.active_properties
 
@@ -102,27 +104,12 @@ class ExportPipeline(object):
 
     def process_item(self, item, spider):
         try:
-            res = requests.post("http://127.0.0.1:8000/api/scraped/", data=json.dumps(item, cls=ScrapyJSONEncoder), headers={"Content-Type":"application/json"})
+            res = requests.post("http://web.roomba.roombacat.xyz/api/scraped/", data=json.dumps(item, cls=ScrapyJSONEncoder), headers={"Content-Type":"application/json"})
         except Exception as e:
             logging.info(e)
         return item
 
-
     def close_spider(self, spider):
-        existing_urls = spider.urls
-        active_properties = [i for i in spider.active_properties]
-        properties_to_deactivate = set(active_properties) - set(existing_urls)
-        items = []
-        for property in properties_to_deactivate:
-            items.append({
-                "url": property,
-                "spider": spider.name,
-                "active": False
-            })
-        try:
-            res = requests.post("http://127.0.0.1:8000/api/scraped/", data=json.dumps(items, cls=ScrapyJSONEncoder), headers={"Content-Type":"application/json"})
-        except Exception as e:
-            logging.info(e)
         self.job_detail["finish"] = datetime.utcnow()
-        self.job_detail["scraped_count"] = self.stats.get_stats()["item_scraped_count"]
+        spider.crawler.engine.close_spider(self, reason='finished')
         # requests.post(os.getenv("API_URL") + "job/", data=self.job_detail)

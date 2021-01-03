@@ -28,5 +28,6 @@ def format_dictionary(d):
         key = key.lower()
         key = unicodedata.normalize('NFD', key).encode('ascii', 'ignore').decode()
         key = key.replace(" ", "_")
+        key = key.replace("/", "_")
         result[key] = v
     return result

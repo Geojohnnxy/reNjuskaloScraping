@@ -22,7 +22,15 @@ DUPEFILTER_DEBUG = True
 
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
-USER_AGENT = 'Mozilla/5.0 (Windows NT 5.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36'
+USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:84.0) Gecko/20100101 Firefox/84.0'
+
+# PYPPETEER_LAUNCH_OPTIONS = {
+#     "headless": False,
+#     "ignoreDefaultArgs": True,
+#     "ignoreHTTPSErrors": True,
+#     "defaultViewport": None,
+#     "args": ["--proxy-server=206.189.59.192:8118", '--start-maximized'],
+# }
 
 # Obey robots.txt rules
 # ROBOTSTXT_OBEY = True
@@ -37,6 +45,8 @@ DOWNLOAD_DELAY = 3
 # The download delay setting will honor only one of:
 CONCURRENT_REQUESTS_PER_DOMAIN = 1
 CONCURRENT_REQUESTS_PER_IP = 0
+RETRY_TIMES = 10
+RETRY_HTTP_CODES = [500, 502, 503, 504, 522, 524, 408, 429, 302, 301]
 
 # Disable cookies (enabled by default)
 #COOKIES_ENABLED = False
@@ -59,8 +69,16 @@ CONCURRENT_REQUESTS_PER_IP = 0
 # Enable or disable downloader middlewares
 # See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 DOWNLOADER_MIDDLEWARES = {
-   # 'app.middlewares.CustomProxyMiddleware': 543,
+   'app.middlewares.CustomProxyMiddleware': 543,
+   # 'scrapy_puppeteer.PuppeteerMiddleware': 800
 }
+#
+# DOWNLOAD_HANDLERS = {
+#     "http": "scrapy_pyppeteer.handler.ScrapyPyppeteerDownloadHandler",
+#     "https": "scrapy_pyppeteer.handler.ScrapyPyppeteerDownloadHandler",
+# }
+
+# TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
 
 # Enable or disable extensions
 # See https://docs.scrapy.org/en/latest/topics/extensions.html
@@ -90,8 +108,9 @@ ITEM_PIPELINES = {
 
 # Enable and configure HTTP caching (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html#httpcache-middleware-settings
-HTTPCACHE_ENABLED = False
-HTTPCACHE_EXPIRATION_SECS = 0
-HTTPCACHE_DIR = 'httpcache'
-HTTPCACHE_IGNORE_HTTP_CODES = []
-HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.FilesystemCacheStorage'
+
+SCHEDULER = "scrapy_redis.scheduler.Scheduler"
+DUPEFILTER_CLASS = "scrapy_redis.dupefilter.RFPDupeFilter"
+REDIS_URL = 'redis://:redis@192.168.147.99:6379'
+# REDIS_HOST = 'localhost'
+# REDIS_PORT = 6379
